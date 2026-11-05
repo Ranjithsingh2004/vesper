@@ -61,12 +61,12 @@ func newRootCmd(stdout, stderr io.Writer, opts *globalOptions, factory clientFac
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &usageError{err}
 	})
-	// Shell completion is added later; do not expose Cobra's default command.
+	// newCompletionCmd replaces Cobra's default completion command.
 	root.CompletionOptions.DisableDefaultCmd = true
 	// Persistent flags are inherited by every subcommand, as in kubectl.
 	opts.addFlags(root.PersistentFlags())
 
-	root.AddCommand(newVersionCmd(), newListCmd(factory), newGetCmd(factory))
+	root.AddCommand(newVersionCmd(), newListCmd(factory), newGetCmd(factory), newCompletionCmd())
 	return root
 }
 
@@ -98,9 +98,24 @@ func run(args []string, stdout, stderr io.Writer, getenv func(string) string) in
 	return execute(root, args, stderr)
 }
 
+// issuesURL is where users report bugs.
+const issuesURL = "https://github.com/eventide-oss/vesper/issues"
+
 // execute runs root with args, prints the error if any, and returns the exit
 // code. Tests call it with a root built around a fake clientFactory.
-func execute(root *cobra.Command, args []string, stderr io.Writer) int {
+//
+// A panic is a bug in vesperctl. It is turned into a one-line message and
+// exit code 1, so users never see a Go stack trace. This is the only recover
+// in the program, so that bugs are not hidden elsewhere.
+func execute(root *cobra.Command, args []string, stderr io.Writer) (code int) {
+	defer func() {
+		if r := recover(); r != nil {
+			_, _ = fmt.Fprintf(stderr, "vesperctl: internal error: %v (this is a bug, please report it at %s)\n",
+				r, issuesURL)
+			code = exitFailure
+		}
+	}()
+
 	root.SetArgs(args)
 
 	cmd, err := root.ExecuteC()

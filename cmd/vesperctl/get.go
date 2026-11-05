@@ -30,7 +30,7 @@ func newGetCmd(factory clientFactory) *cobra.Command {
 			return runGet(cmd, factory, args[0], format)
 		},
 	}
-	output.AddFlag(cmd.Flags(), &format)
+	output.AddFlag(cmd, &format)
 	return cmd
 }
 
@@ -79,9 +79,9 @@ func getError(err error, namespace, name string) error {
 		if details := status.Status().Details; details != nil && details.Name == name {
 			return fmt.Errorf("preview environment %q not found in namespace %q", name, namespace)
 		}
-		return listError(err)
+		return errCRDNotInstalled
 	}
-	return fmt.Errorf("get preview environment %q: %w", name, err)
+	return apiError(err, fmt.Sprintf("get preview environment %q in namespace %q", name, namespace))
 }
 
 // printPreviewDetails writes a kubectl describe-like view of s. now is the
