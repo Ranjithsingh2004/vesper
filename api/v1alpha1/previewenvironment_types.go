@@ -103,8 +103,12 @@ const ConditionReady = "Ready"
 
 // Reasons of the Ready condition.
 const (
-	// ReasonProvisioning means the operator is setting up the preview.
+	// ReasonProvisioning means the operator is setting up the preview, or
+	// its application is not available yet.
 	ReasonProvisioning = "Provisioning"
+	// ReasonDeploymentAvailable means every replica of the application runs
+	// the requested image.
+	ReasonDeploymentAvailable = "DeploymentAvailable"
 	// ReasonNamespaceConflict means the namespace the preview needs exists and
 	// was not created by Vesper for this preview. Vesper leaves it untouched.
 	ReasonNamespaceConflict = "NamespaceConflict"
@@ -147,6 +151,7 @@ type PreviewEnvironmentStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=pe
+// +kubebuilder:validation:XValidation:rule="self.metadata.name.size() <= 63",message="name must be at most 63 characters: it is used as a label value on the objects of the preview"
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.status.url`
 // +kubebuilder:printcolumn:name="Expires",type=string,JSONPath=`.status.expiresAt`
