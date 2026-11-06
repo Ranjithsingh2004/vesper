@@ -283,7 +283,7 @@ func TestEnvtestAPIValidation(t *testing.T) {
 		{"uppercase image", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) { s.Image = "ghcr.io/Acme/app:1" }, "spec.image"},
 		{"port too high", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) { s.Port = 70000 }, "spec.port"},
 		{"too many replicas", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) { s.Replicas = 6 }, "spec.replicas"},
-		{"ttl too short", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) { s.TTL = ttl(30 * time.Minute) }, "spec.ttl"},
+		{"ttl too short", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) { s.TTL = ttl(30 * time.Second) }, "spec.ttl"},
 		{"ttl too long", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) { s.TTL = ttl(200 * time.Hour) }, "spec.ttl"},
 		{"bad env name", "", func(s *vesperv1alpha1.PreviewEnvironmentSpec) {
 			s.Env = []vesperv1alpha1.EnvVar{{Name: "1BAD"}}
@@ -349,4 +349,38 @@ func TestEnvtestDeletionWaitsForNamespace(t *testing.T) {
 	if got.DeletionTimestamp.IsZero() || !controllerutil.ContainsFinalizer(&got, FinalizerName) {
 		t.Errorf("preview = %+v, want it being deleted, with its finalizer", got.ObjectMeta)
 	}
+}
+
+// TestEnvtestExpiresAtFollowsTTL checks status.expiresAt against the
+// creation time the API server sets: 24h by default, then the new ttl.
+// Expiry itself is covered with a fake clock in the unit tests.
+func TestEnvtestExpiresAtFollowsTTL(t *testing.T) {
+	requireEnvtest(t)
+	p := createEnvPreview(t, testSpec)
+
+	waitForExpiry := func(ttl time.Duration) {
+		t.Helper()
+		eventually(t, func() error {
+			var preview vesperv1alpha1.PreviewEnvironment
+			if err := p.get(&preview); err != nil {
+				return err
+			}
+			want := preview.CreationTimestamp.Add(ttl)
+			if got := preview.Status.ExpiresAt; got == nil || !got.Time.Equal(want) {
+				return fmt.Errorf("expiresAt = %v, want %s", got, want)
+			}
+			return nil
+		})
+	}
+	waitForExpiry(24 * time.Hour)
+
+	eventually(t, func() error {
+		var preview vesperv1alpha1.PreviewEnvironment
+		if err := p.get(&preview); err != nil {
+			return err
+		}
+		preview.Spec.TTL = &metav1.Duration{Duration: 72 * time.Hour}
+		return envClient.Update(context.Background(), &preview) // retried on a conflict
+	})
+	waitForExpiry(72 * time.Hour)
 }
