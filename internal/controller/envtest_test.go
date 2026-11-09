@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -689,6 +690,66 @@ func TestEnvtestServesMetrics(t *testing.T) {
 		}
 		if got != pendingBefore+1 {
 			return fmt.Errorf("%s = %v, want %v", pending, got, pendingBefore+1)
+		}
+		return nil
+	})
+}
+
+// TestEnvtestDeniesNewNodeAddress adds a node with a public address while a
+// preview runs, as when a server joins the cluster or a node changes its
+// address: the policy of the preview denies it, without a change to the
+// preview. Removing the node removes the address. envtest runs no kubelet:
+// the node is only an object, and its addresses its status.
+func TestEnvtestDeniesNewNodeAddress(t *testing.T) {
+	requireEnvtest(t)
+	p := createEnvPreview(t, testSpec)
+	p.waitForStatus(t, vesperv1alpha1.PhasePending, vesperv1alpha1.ReasonProvisioning)
+
+	ctx := context.Background()
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "envtest-public-node"}}
+	if err := envClient.Create(ctx, node); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	removed := false
+	t.Cleanup(func() {
+		if !removed {
+			_ = envClient.Delete(ctx, node)
+		}
+	})
+	node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeExternalIP, Address: "203.0.113.20"}}
+	if err := envClient.Status().Update(ctx, node); err != nil {
+		t.Fatalf("set the address of the node: %v", err)
+	}
+
+	except := func() ([]string, error) {
+		var np networkingv1.NetworkPolicy
+		if err := p.getInPreviewNamespace(NetworkPolicyName, &np); err != nil {
+			return nil, err
+		}
+		return np.Spec.Egress[2].To[0].IPBlock.Except, nil
+	}
+	eventually(t, func() error {
+		got, err := except()
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(got, "203.0.113.20/32") {
+			return fmt.Errorf("except = %v, want the address of the new node", got)
+		}
+		return nil
+	})
+
+	if err := envClient.Delete(ctx, node); err != nil {
+		t.Fatalf("delete node: %v", err)
+	}
+	removed = true
+	eventually(t, func() error {
+		got, err := except()
+		if err != nil {
+			return err
+		}
+		if slices.Contains(got, "203.0.113.20/32") {
+			return fmt.Errorf("except = %v, want the address of the deleted node gone", got)
 		}
 		return nil
 	})

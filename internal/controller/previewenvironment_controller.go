@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,6 +81,12 @@ type PreviewEnvironmentReconciler struct {
 // +kubebuilder:rbac:groups="",resources=limitranges;resourcequotas,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+// The operator reads the EndpointSlices of the API server only, in "default"
+// (CacheByObject). The right is cluster-wide because the install bundle puts
+// every namespaced object in the namespace of the operator: a Role in
+// "default" would land there.
+// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
 
 // Reconcile brings the cluster to the state a PreviewEnvironment asks for. It
 // only knows the preview's namespace and name, not what changed, so it reads
@@ -268,6 +275,14 @@ func (r *PreviewEnvironmentReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Watches(&networkingv1.NetworkPolicy{},
 			handler.EnqueueRequestsFromMapFunc(previewOfObject),
 			builder.WithPredicates(predicate.NewPredicateFuncs(managedByVesper))).
+		// The policy of every preview denies the public addresses of the
+		// nodes and of the API server: when they change, update them all.
+		Watches(&corev1.Node{},
+			handler.EnqueueRequestsFromMapFunc(r.allPreviews),
+			builder.WithPredicates(nodeAddressesChanged)).
+		Watches(&discoveryv1.EndpointSlice{},
+			handler.EnqueueRequestsFromMapFunc(r.allPreviews),
+			builder.WithPredicates(predicate.NewPredicateFuncs(isAPIServerSlice), apiServerEndpointsChanged)).
 		// The objects are tied to their preview by labels, not owner
 		// references: an owner reference cannot point to another namespace.
 		Named("previewenvironment").

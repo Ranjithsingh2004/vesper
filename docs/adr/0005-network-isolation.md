@@ -38,7 +38,10 @@ pod in it and denies all traffic in both directions, except:
   address except the private ranges (`10.0.0.0/8`, `172.16.0.0/12`,
   `192.168.0.0/16`, `fc00::/7`), the link-local ranges (`169.254.0.0/16`,
   `fe80::/10`) and the shared address space (`100.64.0.0/10`). The pods, the
-  Services and the nodes of a cluster live in those ranges.
+  Services and the nodes of a cluster live in those ranges. When the nodes or
+  the API server have public addresses, those are denied too: the operator
+  reads them from the nodes and from the EndpointSlices of the `kubernetes`
+  Service, and keeps the policy of every preview up to date.
 
 The operator creates the policy before the Deployment, so no pod of a preview
 runs without it, and restores it when it is changed by hand.
@@ -68,6 +71,11 @@ APIs (payments, maps, authentication), and their previews would fail.
   releases), k3s, Calico and Cilium enforce NetworkPolicies; flannel alone
   does not. The docs say so, and must never promise hard multi-tenant
   isolation: a namespace stays a soft boundary.
+- Nodes with public addresses (a server with k3s, for example) were first
+  missed: a preview could reach the API server and the kubelet through them.
+  Denying the addresses of the cluster fixed it; the price is that a preview
+  cannot call a public URL served by the same cluster, and that the operator
+  reads nodes and EndpointSlices.
 - An ingress controller on the host network (`hostNetwork`) connects with the
   address of the node, not from a namespace; whether the policy lets it in
   depends on the CNI.

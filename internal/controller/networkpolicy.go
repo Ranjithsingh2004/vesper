@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -31,8 +32,14 @@ var privateNetworks = struct{ ipv4, ipv6 []string }{
 func (r *PreviewEnvironmentReconciler) ensureNetworkPolicy(
 	ctx context.Context, preview *vesperv1alpha1.PreviewEnvironment, namespace string,
 ) error {
+	hosts, err := r.hostAddresses(ctx)
+	if err != nil {
+		// Without the addresses of the cluster, the policy could let the
+		// preview reach them: no policy, so no Deployment either.
+		return err
+	}
 	np := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: NetworkPolicyName, Namespace: namespace}}
-	return r.ensureOwned(ctx, preview, np, "networkpolicy", func() { mutateNetworkPolicy(np, preview) })
+	return r.ensureOwned(ctx, preview, np, "networkpolicy", func() { mutateNetworkPolicy(np, preview, hosts) })
 }
 
 // mutateNetworkPolicy denies all traffic to and from the pods of the preview,
@@ -41,8 +48,9 @@ func (r *PreviewEnvironmentReconciler) ensureNetworkPolicy(
 //     every namespace that is not a preview, such as the one of the ingress
 //     controller. Previews cannot reach each other;
 //   - out: the pods of the preview, DNS, and the public internet, but not the
-//     private networks.
-func mutateNetworkPolicy(np *networkingv1.NetworkPolicy, preview *vesperv1alpha1.PreviewEnvironment) {
+//     private networks, nor the public addresses of the nodes and of the API
+//     server (hosts).
+func mutateNetworkPolicy(np *networkingv1.NetworkPolicy, preview *vesperv1alpha1.PreviewEnvironment, hosts hostAddresses) {
 	setPreviewLabels(np, preview)
 
 	tcp, udp := corev1.ProtocolTCP, corev1.ProtocolUDP
@@ -65,8 +73,8 @@ func mutateNetworkPolicy(np *networkingv1.NetworkPolicy, preview *vesperv1alpha1
 			// To any address: the DNS server of the cluster has a private one.
 			{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &udp, Port: &dns}, {Protocol: &tcp, Port: &dns}}},
 			{To: []networkingv1.NetworkPolicyPeer{
-				{IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0", Except: privateNetworks.ipv4}},
-				{IPBlock: &networkingv1.IPBlock{CIDR: "::/0", Except: privateNetworks.ipv6}},
+				{IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0", Except: slices.Concat(privateNetworks.ipv4, hosts.ipv4)}},
+				{IPBlock: &networkingv1.IPBlock{CIDR: "::/0", Except: slices.Concat(privateNetworks.ipv6, hosts.ipv6)}},
 			}},
 		},
 	}

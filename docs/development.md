@@ -208,12 +208,21 @@ traffic to and from its pods, except
 | Direction | Allowed |
 | --- | --- |
 | In | The port `http` of the application, from the pods of the preview and from any namespace that is not a preview (without `app.kubernetes.io/managed-by=vesper`), such as the one of the ingress controller |
-| Out | The pods of the preview, DNS (port 53), and the public internet: not the private (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`), link-local (`169.254/16`, `fe80::/10`) or shared (`100.64/10`) ranges |
+| Out | The pods of the preview, DNS (port 53), and the public internet: not the private (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`), link-local (`169.254/16`, `fe80::/10`) or shared (`100.64/10`) ranges, nor the public addresses of the nodes and of the API server |
 
 So a preview cannot call another preview, nor anything inside the cluster:
 other applications, the API server, the metadata service of the cloud. It can
 call external APIs. A preview that needs a service inside the cluster does not
 work today.
+
+When the nodes have public addresses, as on a server with k3s, those
+addresses lead to the cluster too: the kubelet and NodePort Services listen on
+them, and a connection to the `kubernetes` Service reaches the API server
+through one. The operator reads the addresses of the nodes and the endpoints
+of the API server, adds the public ones to the denied blocks (`/32`, `/128`),
+and updates the policy of every preview when they change. As a consequence, a
+preview cannot call a public URL served by the cluster itself, such as
+another preview or an application behind the same ingress controller.
 
 **The CNI enforces the policy, not the API server.** kindnet (the CNI of
 recent kind releases), k3s, Calico and Cilium do; with a CNI that does not,
@@ -239,6 +248,8 @@ code uses:
 | `namespaces` | get, list, watch, create, patch, delete | create the namespace of a preview, put its labels back, delete it |
 | `deployments`, `services`, `limitranges`, `resourcequotas`, `networkpolicies` | get, list, watch, create, update | create the objects of a preview and restore them |
 | `ingresses` | get, list, watch, create, update, delete | the same, and delete the Ingress when the preview domain is removed |
+| `nodes` | get, list, watch | read the addresses of the nodes, to deny them to previews |
+| `endpointslices` | get, list, watch | read the addresses of the API server, to deny them to previews; the cache holds only the EndpointSlices of the Service `kubernetes` in `default` |
 
 The Role `leader-election-role` (`config/rbac/leader_election_role.yaml`), in
 `vesper-system` only, allows `get`, `create` and `update` on `leases`, and

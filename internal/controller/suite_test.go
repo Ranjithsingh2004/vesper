@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -138,6 +139,7 @@ func startEnvtest() (stop func() error, err error) {
 	envMetricsURL = "http://" + metricsAddr + "/metrics"
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:  scheme,
+		Cache:   cache.Options{ByObject: CacheByObject()},
 		Metrics: metricsserver.Options{BindAddress: metricsAddr},
 	})
 	if err != nil {
