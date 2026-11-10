@@ -10,6 +10,8 @@
   step by step, and the life of a preview.
 - [CRD reference](crd-reference.md): every field of `PreviewEnvironment`,
   generated from the Go types (`make docs-reference`).
+- [Troubleshooting](troubleshooting.md): what each phase and reason means,
+  the commands that show the cause, and the usual fix.
 - [Development](development.md): tools and the local kind cluster.
 - [Try Vesper on a server](try-on-a-server.md): k3s on a VPS, a wildcard DNS
   record and HTTPS with cert-manager, step by step.
