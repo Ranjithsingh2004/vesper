@@ -126,7 +126,10 @@ condition:
 | `Failed`, `ReconcileError` | the operator failed | read the message, and the logs of the operator |
 | `Expired` | the ttl has passed | the preview is being deleted; create it again |
 
-Nothing happens at all? Check that the operator runs (`make run`).
+Nothing happens at all? Check that the operator runs (`make run`). This table
+covers the common cases; [Troubleshooting](troubleshooting.md) goes through
+every phase and reason of the API, with the commands that show the cause and
+the fix.
 
 ## Clean up
 
