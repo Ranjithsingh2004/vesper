@@ -12,9 +12,10 @@ vesperctl get demo
 kubectl describe pe demo
 ```
 
-`vesperctl get` prints the phase, the URL, the expiry and the conditions.
-`kubectl describe` prints the same conditions and, at the bottom, the events
-the operator recorded, which is usually where a failure explains itself.
+`vesperctl get` prints the phase, the URL, the expiry, the conditions and, since
+#151, the latest events of the preview, so it is enough in most cases.
+`kubectl describe` adds the full list of events and the rest of the object,
+which is usually where a failure explains itself.
 
 A preview carries up to three conditions:
 
@@ -85,7 +86,7 @@ of its namespace is full. The message carries the error of the API server.
 ```sh
 kubectl describe pe demo       # the message of the Ready condition
 kubectl get resourcequota -n "$NS" -o yaml
-kubectl events -n "$NS" --field-selector reason=FailedCreate
+kubectl get events -n "$NS" --field-selector reason=FailedCreate
 ```
 
 The fix is to need less room or to have more:
@@ -126,8 +127,8 @@ preview. Vesper leaves it untouched rather than adopt or delete it, so the
 preview never gets an application.
 
 ```sh
-kubectl get namespace -l vesper.eventide.dev/preview-name=demo
-kubectl describe pe demo       # the name of the conflicting namespace, in the message
+kubectl get pe demo -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}'
+kubectl describe pe demo       # the same message, with the rest of the condition
 ```
 
 If the namespace is a leftover of an earlier preview that you no longer need,
@@ -172,7 +173,7 @@ The ttl has passed and the deletion is in progress. Same commands as
 `TTLPassed`. If it stays in this state, the namespace is not going away: see
 [a deleted preview that stays](#a-deleted-preview-that-stays).
 
-### Ready `TTLNotReached`
+### Expired `TTLNotReached`
 
 Nothing is wrong. `Expired` is False and its message gives the expiry. Extend
 the preview if the time left is too short:
@@ -203,7 +204,7 @@ When even `kubectl get pe` fails with a message about a resource type that the
 server does not have, the CRD is not installed in the cluster.
 
 ```sh
-kubectl get crd previewenvironments.eventide.dev
+kubectl get crd previewenvironments.vesper.eventide.dev
 ```
 
 Install it with `make install` on a local cluster, or the install bundle of the
@@ -226,7 +227,7 @@ labels:
 
 ```sh
 kubectl patch pe demo --type=merge -p '{"metadata":{"finalizers":null}}'
-kubectl delete namespace -l vesper.eventide.dev/preview-name=demo
+kubectl delete namespace -l vesper.eventide.dev/preview-name=demo,vesper.eventide.dev/preview-namespace=<namespace of the preview>
 ```
 
 ### The preview has no address
