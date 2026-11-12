@@ -10,6 +10,8 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+
+	"github.com/eventide-oss/vesper/internal/output"
 )
 
 // version is set at build time with -ldflags "-X main.version=<value>".
@@ -82,17 +84,36 @@ func newRootCmd(stdout, stderr io.Writer, opts *globalOptions, factory clientFac
 	return root
 }
 
+// versionInfo is what `vesperctl version -o json` prints, and -o yaml. The
+// field names are the stable interface a script reads, so they do not follow
+// the Go names.
+type versionInfo struct {
+	Version   string `json:"version"`
+	GoVersion string `json:"goVersion"`
+	Platform  string `json:"platform"`
+}
+
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var format output.Format
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the version of vesperctl",
 		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "vesperctl version %s (%s %s/%s)\n",
-				version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-			return err
+			if format == output.Table {
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "vesperctl version %s (%s %s/%s)\n",
+					version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+				return err
+			}
+			return output.Write(cmd.OutOrStdout(), format, versionInfo{
+				Version:   version,
+				GoVersion: runtime.Version(),
+				Platform:  runtime.GOOS + "/" + runtime.GOARCH,
+			})
 		},
 	}
+	output.AddFlag(cmd, &format)
+	return cmd
 }
 
 // run executes the command in args (the program name excluded), writes to

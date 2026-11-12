@@ -203,13 +203,34 @@ Then start a new shell.
 
 Print the version of vesperctl, the Go version and the platform.
 
+| Flag | Meaning |
+| --- | --- |
+| `-o`, `--output <format>` | `table` (default), `json` or `yaml` |
+
+```text
+$ vesperctl version
+vesperctl version v0.1.0 (go1.27.3 linux/amd64)
+
+$ vesperctl version -o json
+{
+  "version": "v0.1.0",
+  "goVersion": "go1.27.3",
+  "platform": "linux/amd64"
+}
+```
+
+The three fields are what a script reads: `version` is the release, or `dev`
+for a plain `go build`; `goVersion` is the toolchain that built the binary;
+`platform` is the OS and architecture it runs on. The default line stays the
+same, so a shell prompt or a log line does not change.
+
 ## Output formats
 
-`-o json` and `-o yaml` print a summary of each preview environment, not the
-raw Kubernetes object. The summary is a stable contract for scripts: fields
-may be added in later versions, and existing fields keep their name and
-meaning. Use `kubectl get previewenvironment <name> -o yaml` for the raw
-object.
+`-o json` and `-o yaml` on `get` and `list` print a summary of each preview
+environment, not the raw Kubernetes object. The summary is a stable contract
+for scripts: fields may be added in later versions, and existing fields keep
+their name and meaning. Use `kubectl get previewenvironment <name> -o yaml`
+for the raw object.
 
 `get` prints one summary; `list` prints `{"items": [...]}`.
 
