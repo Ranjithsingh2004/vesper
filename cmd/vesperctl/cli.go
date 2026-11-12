@@ -9,8 +9,9 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/eventide-oss/vesper/internal/output"
 	"github.com/spf13/cobra"
+
+	"github.com/eventide-oss/vesper/internal/output"
 )
 
 // version is set at build time with -ldflags "-X main.version=<value>".
